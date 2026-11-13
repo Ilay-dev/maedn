@@ -60,6 +60,15 @@ export function GameTable({
 
   const isHost = room.hostId === room.myPlayerId;
   const currentPlayer = room.players.find((p) => p.id === room.currentPlayerId) ?? null;
+  const lastRollPlayer = room.players.find((p) => p.id === room.lastRollPlayerId) ?? null;
+  const currentColorMeta =
+    currentPlayer?.seat !== null && currentPlayer?.seat !== undefined
+      ? SEAT_COLORS[currentPlayer.seat]
+      : null;
+  const lastRollColorMeta =
+    lastRollPlayer?.seat !== null && lastRollPlayer?.seat !== undefined
+      ? SEAT_COLORS[lastRollPlayer.seat]
+      : null;
   const isMyTurn = room.phase === 'playing' && room.currentPlayerId === room.myPlayerId;
   const isMyRollTurn = isMyTurn && room.turnPhase === 'waiting_roll';
   const isMyMoveTurn = isMyTurn && room.turnPhase === 'waiting_move';
@@ -219,29 +228,38 @@ export function GameTable({
         </div>
       )}
 
-      {/* Players Strip */}
-      <section className="px-4 pt-3 sm:px-6 z-10">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-stretch justify-center gap-2 sm:gap-2.5">
+      {/* Players Strip — every player shows their own live rolling die */}
+      <section className="px-3 pt-3 sm:px-6 z-10">
+        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:flex sm:flex-wrap items-stretch justify-center gap-2 sm:gap-2.5">
           {room.players.map((p) => {
             const isTurn = room.phase === 'playing' && room.currentPlayerId === p.id;
+            const isLastRoller = room.lastRollPlayerId === p.id && p.lastRoll !== null;
             const isMe = p.id === room.myPlayerId;
             const colorMeta = p.seat !== null ? SEAT_COLORS[p.seat] : null;
 
             return (
               <div
                 key={p.id}
-                className={`rounded-xl border px-3 py-2 min-w-[138px] sm:min-w-[162px] transition-all flex flex-col justify-between gap-1.5 ${
+                style={{
+                  borderColor: isTurn
+                    ? colorMeta?.hex ?? 'rgba(255,255,255,0.65)'
+                    : isLastRoller && colorMeta
+                      ? colorMeta.border
+                      : undefined,
+                  boxShadow: isTurn && colorMeta ? `0 0 20px ${colorMeta.ring}` : undefined,
+                }}
+                className={`rounded-xl border px-3 py-2 sm:min-w-[172px] transition-all flex items-center justify-between gap-2.5 ${
                   isTurn
-                    ? 'border-white/65 bg-white/[0.06]'
+                    ? 'bg-white/[0.06]'
                     : 'border-white/[0.07] bg-white/[0.015]'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex flex-col justify-between gap-1.5">
                   <div className="flex items-center gap-1.5 min-w-0">
                     {colorMeta && (
                       <span
                         className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          isTurn ? 'ring-2 ring-white/75' : ''
+                          isTurn ? 'ring-2 ring-white/80' : ''
                         }`}
                         style={{ backgroundColor: colorMeta.hex }}
                       />
@@ -249,100 +267,158 @@ export function GameTable({
                     <span className="text-xs font-medium text-white truncate">
                       {p.name}
                     </span>
-                    {isMe && <span className="text-[10px] text-zinc-500">(Du)</span>}
+                    {isMe && <span className="text-[10px] text-zinc-500 shrink-0">(Du)</span>}
                     {p.isBot && <Bot className="w-3 h-3 text-zinc-500 shrink-0" />}
                   </div>
+
+                  {/* 4 Pawn Goal Dots */}
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <div className="flex items-center gap-1" title="Figuren im Ziel">
+                      {[0, 1, 2, 3].map((idx) => {
+                        const inGoal = idx < p.goalsCount;
+                        return (
+                          <span
+                            key={idx}
+                            className="w-2 h-2 rounded-full border transition-colors"
+                            style={{
+                              backgroundColor: inGoal && colorMeta ? colorMeta.hex : 'transparent',
+                              borderColor: inGoal && colorMeta ? colorMeta.border : 'rgba(255,255,255,0.18)',
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className="font-mono-code text-[10px] text-zinc-500">
+                      {p.capturesCount > 0 ? `${p.capturesCount}× raus` : `${p.goalsCount}/4`}
+                    </span>
+                  </div>
+
+                  {!p.connected && !p.isBot && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-500">Getrennt</span>
+                      {isHost && isTurn && (
+                        <button
+                          type="button"
+                          onClick={() => onSkipDisconnected(p.id)}
+                          className="inline-flex items-center gap-1 text-[10px] text-zinc-300 hover:text-white underline underline-offset-2 cursor-pointer"
+                        >
+                          <SkipForward className="w-2.5 h-2.5" />
+                          <span>Skip</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* 4 Pawn Goal Dots */}
-                <div className="flex items-center justify-between gap-2 text-[11px]">
-                  <div className="flex items-center gap-1" title="Figuren im Ziel">
-                    {[0, 1, 2, 3].map((idx) => {
-                      const inGoal = idx < p.goalsCount;
-                      return (
-                        <span
-                          key={idx}
-                          className="w-2 h-2 rounded-full border transition-colors"
-                          style={{
-                            backgroundColor: inGoal && colorMeta ? colorMeta.hex : 'transparent',
-                            borderColor: inGoal && colorMeta ? colorMeta.border : 'rgba(255,255,255,0.18)',
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <span className="font-mono-code text-[10px] text-zinc-500">
-                    {p.capturesCount > 0 ? `${p.capturesCount}× raus` : `${p.goalsCount}/4`}
-                  </span>
+                {/* Per-player live tumbling die visible to everyone */}
+                <div className="shrink-0 flex flex-col items-end justify-center">
+                  <MaednDice
+                    value={p.lastRoll}
+                    rollSerial={p.lastRollSerial}
+                    highlighted={isLastRoller}
+                    accentHex={colorMeta?.hex}
+                    size="xs"
+                  />
                 </div>
-
-                {!p.connected && !p.isBot && (
-                  <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                    <span className="text-[10px] text-zinc-500">Getrennt</span>
-                    {isHost && isTurn && (
-                      <button
-                        type="button"
-                        onClick={() => onSkipDisconnected(p.id)}
-                        className="inline-flex items-center gap-1 text-[10px] text-zinc-300 hover:text-white underline underline-offset-2 cursor-pointer"
-                      >
-                        <SkipForward className="w-2.5 h-2.5" />
-                        <span>Überspringen</span>
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
       </section>
 
-      {/* Center Stage: Classic Cross Board */}
-      <main className="flex-1 flex flex-col items-center justify-center px-3 py-3 sm:px-6 gap-3">
+      {/* Center Stage: Architectural Cross Board */}
+      <main className="flex-1 flex flex-col items-center justify-center px-3 py-2.5 sm:px-6">
         <MaednBoard
           players={room.players}
           myPlayerId={room.myPlayerId}
+          currentTurnSeat={currentPlayer?.seat ?? null}
           isMyMoveTurn={isMyMoveTurn}
           legalMoves={room.legalMoves}
           lastMovedPawn={room.lastMovedPawn}
-          lastRoll={room.lastRoll}
-          rollSerial={room.rollSerial}
-          isMyRollTurn={isMyRollTurn}
-          onRoll={() => void handleRoll()}
           onMovePawn={(idx) => void handleMovePawn(idx)}
         />
       </main>
 
-      {/* Bottom Controls & Status */}
+      {/* Shared Active Dice Table Dock */}
       <footer className="px-4 pb-5 pt-1 sm:px-6 z-10">
-        <div className="max-w-lg mx-auto flex flex-col items-center gap-2.5">
-          {/* Active Control Strip */}
-          <div className="w-full rounded-2xl border border-white/[0.08] bg-[#08080A] px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+        <div className="max-w-lg mx-auto">
+          <div
+            style={{
+              borderColor: isMyTurn
+                ? currentColorMeta?.hex ?? 'rgba(255,255,255,0.4)'
+                : undefined,
+            }}
+            className="w-full rounded-2xl border border-white/[0.09] bg-[#08080A] px-4 py-3 flex items-center justify-between gap-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.8)] transition-colors"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
               <MaednDice
                 value={room.lastRoll}
                 rollSerial={room.rollSerial}
-                active={isMyTurn}
+                highlighted={isMyRollTurn || room.rollSerial > 0}
+                interactive={isMyRollTurn}
                 disabled={!isMyRollTurn}
                 onRoll={() => void handleRoll()}
-                size="sm"
+                accentHex={
+                  isMyRollTurn
+                    ? currentColorMeta?.hex
+                    : lastRollColorMeta?.hex ?? currentColorMeta?.hex
+                }
+                size="lg"
               />
 
               <div className="min-w-0">
-                <div className={`text-xs sm:text-sm font-medium truncate ${isMyTurn ? 'text-white' : 'text-zinc-400'}`}>
-                  {isMyRollTurn
-                    ? room.maxRollsAllowed > 1
-                      ? `Du bist am Zug · Versuch ${room.rollsUsed + 1}/${room.maxRollsAllowed}`
-                      : 'Du bist am Zug · Bitte würfeln'
-                    : isMyMoveTurn
-                      ? room.legalMoves[0]?.reasonHint ?? 'Wähle eine leuchtende Figur'
-                      : `${currentPlayer?.name ?? '…'} ist am Zug`}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {currentColorMeta && (
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: currentColorMeta.hex }}
+                    />
+                  )}
+                  <span
+                    className={`text-xs sm:text-sm font-semibold truncate ${
+                      isMyTurn ? 'text-white' : 'text-zinc-200'
+                    }`}
+                  >
+                    {isMyRollTurn
+                      ? room.maxRollsAllowed > 1
+                        ? `Du bist dran · Versuch ${room.rollsUsed + 1}/${room.maxRollsAllowed}`
+                        : 'Du bist dran · Würfeln!'
+                      : isMyMoveTurn
+                        ? room.legalMoves[0]?.reasonHint ?? 'Wähle eine leuchtende Figur'
+                        : `${currentPlayer?.name ?? '…'} ist am Zug`}
+                  </span>
                 </div>
-                {room.lastEvent && (
-                  <p className="text-[11px] text-zinc-500 truncate mt-0.5">
-                    {room.lastEvent.message}
-                  </p>
-                )}
+
+                <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                  {lastRollPlayer && room.lastRoll !== null ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 truncate">
+                      {lastRollColorMeta && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: lastRollColorMeta.hex }}
+                        />
+                      )}
+                      <span className="truncate">
+                        <strong className="font-medium text-zinc-200">
+                          {lastRollPlayer.name}
+                        </strong>{' '}
+                        würfelte{' '}
+                        <strong className="font-mono-code text-white">
+                          {room.lastRoll}
+                        </strong>
+                      </span>
+                      {room.lastRoll === 6 && (
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white shrink-0">
+                          6!
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {room.lastEvent?.message ?? 'Bereit zum ersten Wurf'}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -351,7 +427,7 @@ export function GameTable({
                 type="button"
                 disabled={submitting}
                 onClick={() => void handleRoll()}
-                className="shrink-0 rounded-xl bg-white text-black px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                className="shrink-0 rounded-xl bg-white text-black px-4 py-2.5 text-xs sm:text-sm font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.16)]"
               >
                 <Dices className="w-4 h-4" />
                 <span>Würfeln</span>
@@ -363,7 +439,7 @@ export function GameTable({
                 type="button"
                 disabled={submitting}
                 onClick={() => void handleMovePawn(room.legalMoves[0].pawnIndex)}
-                className="shrink-0 rounded-xl bg-white text-black px-3.5 py-2 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors cursor-pointer"
+                className="shrink-0 rounded-xl bg-white text-black px-3.5 py-2.5 text-xs font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors cursor-pointer"
               >
                 {room.legalMoves[0].capturesPlayerId
                   ? 'Rauswerfen'
@@ -386,3 +462,4 @@ export function GameTable({
     </div>
   );
 }
+

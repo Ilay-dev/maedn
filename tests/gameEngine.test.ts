@@ -32,6 +32,8 @@ function makePlayer(id: string, name: string, isBot = false): InternalMaednPlaye
     color: null,
     pawns: createInitialPawns(),
     capturesCount: 0,
+    lastRoll: null,
+    lastRollSerial: 0,
   };
 }
 
@@ -76,6 +78,9 @@ describe('MAEDN board & gameEngine', () => {
     const r1 = performRollDice(game, [p1, p2], 'p1', 3);
     expect(r1.autoAdvanced).toBe(false);
     expect(game.activeSeatOrder[game.currentTurnOrderIndex]).toBe('p1');
+    expect(game.lastRollPlayerId).toBe('p1');
+    expect(p1.lastRoll).toBe(3);
+    expect(p1.lastRollSerial).toBe(1);
 
     const r2 = performRollDice(game, [p1, p2], 'p1', 5);
     expect(r2.autoAdvanced).toBe(false);
@@ -182,3 +187,4 @@ describe('MAEDN board & gameEngine', () => {
     expect(picked?.capturesPlayerId).toBe('p1');
   });
 });
+

@@ -57,8 +57,10 @@ export function useSound() {
   );
 
   const playDiceSound = useCallback(() => {
-    playTone(300, 0.04, 'triangle', 0.035);
-    setTimeout(() => playTone(460, 0.045, 'triangle', 0.03), 40);
+    playTone(260, 0.032, 'triangle', 0.03);
+    setTimeout(() => playTone(380, 0.032, 'triangle', 0.028), 65);
+    setTimeout(() => playTone(310, 0.032, 'triangle', 0.026), 135);
+    setTimeout(() => playTone(520, 0.055, 'sine', 0.038), 240);
   }, [playTone]);
 
   const playStepSound = useCallback(() => {
@@ -105,3 +107,4 @@ export function useSound() {
     playWinSound,
   };
 }
+

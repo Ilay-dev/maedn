@@ -29,6 +29,8 @@ export interface InternalMaednPlayer {
   color: PlayerColorId | null;
   pawns: PawnState[];
   capturesCount: number;
+  lastRoll: number | null;
+  lastRollSerial: number;
 }
 
 export interface InternalMaednGame {
@@ -37,6 +39,7 @@ export interface InternalMaednGame {
   turnNumber: number;
   turnPhase: TurnPhase;
   lastRoll: number | null;
+  lastRollPlayerId: string | null;
   rollSerial: number;
   rollsUsed: number;
   maxRollsAllowed: number;
@@ -261,6 +264,8 @@ export function startMatch(players: InternalMaednPlayer[]): InternalMaednGame {
     p.color = seat !== null ? SEAT_COLORS[seat].id : null;
     p.pawns = createInitialPawns();
     p.capturesCount = 0;
+    p.lastRoll = null;
+    p.lastRollSerial = 0;
     if (seat !== null) {
       orderedIds.push(p.id);
     }
@@ -275,6 +280,7 @@ export function startMatch(players: InternalMaednPlayer[]): InternalMaednGame {
     turnNumber: 1,
     turnPhase: 'waiting_roll',
     lastRoll: null,
+    lastRollPlayerId: null,
     rollSerial: 0,
     rollsUsed: 0,
     maxRollsAllowed: maxRolls,
@@ -330,8 +336,11 @@ export function performRollDice(
       : secureRandomInt(1, 7);
 
   game.lastRoll = roll;
+  game.lastRollPlayerId = player.id;
   game.rollSerial += 1;
   game.rollsUsed += 1;
+  player.lastRoll = roll;
+  player.lastRollSerial += 1;
 
   const legalMoves = getLegalMoves(player, players, roll);
   game.legalMoves = legalMoves;
@@ -576,3 +585,4 @@ export function buildMatchSummary(
     standings,
   };
 }
+

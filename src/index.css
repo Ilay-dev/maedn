@@ -30,15 +30,47 @@
   }
 }
 
-@keyframes diceRoll {
+@keyframes diceTumble {
   0% {
-    transform: rotate(0deg) scale(0.92);
+    transform: perspective(260px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
   }
-  50% {
-    transform: rotate(8deg) scale(1.06);
+  20% {
+    transform: perspective(260px) rotateX(-24deg) rotateY(22deg) rotateZ(-14deg) scale(1.12);
+  }
+  45% {
+    transform: perspective(260px) rotateX(22deg) rotateY(-26deg) rotateZ(16deg) scale(1.15);
+  }
+  70% {
+    transform: perspective(260px) rotateX(-16deg) rotateY(14deg) rotateZ(-8deg) scale(1.08);
+  }
+  88% {
+    transform: perspective(260px) rotateX(6deg) rotateY(-4deg) rotateZ(3deg) scale(1.03);
   }
   100% {
-    transform: rotate(0deg) scale(1);
+    transform: perspective(260px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+}
+
+@keyframes diceLand {
+  0% {
+    transform: scale(1.08);
+  }
+  55% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes softPulse {
+  0%, 100% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.08);
   }
 }
 
@@ -46,6 +78,15 @@
   animation: popIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.animate-dice-roll {
-  animation: diceRoll 220ms cubic-bezier(0.16, 1, 0.3, 1);
+.animate-dice-tumble {
+  animation: diceTumble 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+.animate-dice-land {
+  animation: diceLand 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-soft-pulse {
+  animation: softPulse 1.5s ease-in-out infinite;
+}
+

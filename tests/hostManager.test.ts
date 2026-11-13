@@ -51,7 +51,12 @@ describe('BrowserHostManager (MAEDN P2P)', () => {
     // Host rolls dice
     const rollRes = manager.handleAction('HOST_LOCAL', 'game:roll');
     expect(rollRes.ok).toBe(true);
-    expect(latest.get('peer-1')!.lastRoll).not.toBeNull();
+    const updatedGuest = latest.get('peer-1')!;
+    const updatedHostPlayer = updatedGuest.players.find((p) => p.id === hostState.myPlayerId)!;
+    expect(updatedGuest.lastRoll).not.toBeNull();
+    expect(updatedGuest.lastRollPlayerId).toBe(hostState.myPlayerId);
+    expect(updatedHostPlayer.lastRoll).toBe(updatedGuest.lastRoll);
+    expect(updatedHostPlayer.lastRollSerial).toBe(1);
 
     manager.destroy();
   });
@@ -87,3 +92,4 @@ describe('BrowserHostManager (MAEDN P2P)', () => {
     manager.destroy();
   });
 });
+

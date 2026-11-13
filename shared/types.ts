@@ -46,6 +46,8 @@ export interface PublicMaednPlayer {
   pawns: PawnState[];
   capturesCount: number;
   goalsCount: number;
+  lastRoll: number | null;
+  lastRollSerial: number;
 }
 
 export interface MatchStanding {
@@ -78,6 +80,7 @@ export interface ClientRoomState {
   currentPlayerId: string | null;
   turnPhase: TurnPhase;
   lastRoll: number | null;
+  lastRollPlayerId: string | null;
   rollSerial: number;
   rollsUsed: number;
   maxRollsAllowed: number;
@@ -102,3 +105,4 @@ export interface RoomActionResponse {
   error?: string;
   credentials?: SessionCredentials;
 }
+

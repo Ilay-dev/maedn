@@ -77,6 +77,8 @@ export class BrowserHostManager {
       color: null,
       pawns: createInitialPawns(),
       capturesCount: 0,
+      lastRoll: null,
+      lastRollSerial: 0,
     };
 
     this.room = {
@@ -158,6 +160,8 @@ export class BrowserHostManager {
       pawns: p.pawns.map((pawn) => ({ ...pawn })),
       capturesCount: p.capturesCount,
       goalsCount: countGoalPawns(p),
+      lastRoll: p.lastRoll,
+      lastRollSerial: p.lastRollSerial,
     }));
 
     const isMyTurn =
@@ -176,6 +180,7 @@ export class BrowserHostManager {
       currentPlayerId,
       turnPhase: game?.turnPhase ?? 'waiting_roll',
       lastRoll: game?.lastRoll ?? null,
+      lastRollPlayerId: game?.lastRollPlayerId ?? null,
       rollSerial: game?.rollSerial ?? 0,
       rollsUsed: game?.rollsUsed ?? 0,
       maxRollsAllowed: game?.maxRollsAllowed ?? 1,
@@ -216,6 +221,8 @@ export class BrowserHostManager {
       color: null,
       pawns: createInitialPawns(),
       capturesCount: 0,
+      lastRoll: null,
+      lastRollSerial: 0,
     };
 
     this.room.players.push(player);
@@ -378,6 +385,8 @@ export class BrowserHostManager {
           color: null,
           pawns: createInitialPawns(),
           capturesCount: 0,
+          lastRoll: null,
+          lastRollSerial: 0,
         };
         this.room.players.push(bot);
         this.evaluateAutoStart();
@@ -557,6 +566,8 @@ export class BrowserHostManager {
       p.color = null;
       p.pawns = createInitialPawns();
       p.capturesCount = 0;
+      p.lastRoll = null;
+      p.lastRollSerial = 0;
       p.isReady = p.isBot;
     }
   }
@@ -570,7 +581,7 @@ export class BrowserHostManager {
     const currPlayer = this.room.players.find((p) => p.id === currId);
     if (!currPlayer || !currPlayer.isBot) return;
 
-    const delayMs = game.turnPhase === 'waiting_roll' ? 560 : 520;
+    const delayMs = game.turnPhase === 'waiting_roll' ? 950 : 900;
     this.room.botTimer = setTimeout(() => {
       if (this.room.phase !== 'playing' || !this.room.game) return;
       const activeGame = this.room.game;
@@ -611,3 +622,4 @@ export function getPlayerSeatLabelDe(seat: number | null): string {
   }
   return '';
 }
+

@@ -36,12 +36,13 @@ const GOAL_ENTRY_TRACK_INDEX: Record<SeatIndex, number> = {
   3: 29,
 };
 
-// Bounding box of each 2x2 corner base in 1100x1100 coordinates
+// Strictly symmetric 2x2 corner boxes centered on their 4 sockets:
+// Top-Left sockets: (50,50)..(150,150) -> center (100,100) -> x:4..196, y:4..196
 const BASE_CORNER_BOX: Record<SeatIndex, { x: number; y: number; size: number }> = {
-  0: { x: 10, y: 890, size: 200 },
-  1: { x: 10, y: 10, size: 200 },
-  2: { x: 890, y: 10, size: 200 },
-  3: { x: 890, y: 890, size: 200 },
+  0: { x: 4, y: 904, size: 192 },
+  1: { x: 4, y: 4, size: 192 },
+  2: { x: 904, y: 4, size: 192 },
+  3: { x: 904, y: 904, size: 192 },
 };
 
 // Arrow direction from each seat's Start cell along step +1
@@ -139,7 +140,7 @@ export function MaednBoard({
     return map;
   }, []);
 
-  // Flatten all active pawns so each piece stays mounted under a stable key & glides on coordinate updates
+  // Sort movable pawns last so they always paint above stationary/captured pawns
   const pawnTokens = useMemo(() => {
     const items: Array<{
       key: string;
@@ -171,29 +172,48 @@ export function MaednBoard({
       }
     }
 
+    items.sort((a, b) => Number(Boolean(a.legalMove)) - Number(Boolean(b.legalMove)));
     return items;
   }, [players, myPlayerId, legalMoveByPawn, lastMovedPawn, currentTurnSeat]);
 
   return (
-    <div className="relative rounded-[28px] border border-white/[0.09] bg-[#060608] p-2.5 sm:p-4 shadow-[0_24px_80px_rgba(0,0,0,0.95)]">
-      {/* Subtle architectural corner glow under board */}
-      <div className="relative w-[min(92vw,420px)] sm:w-[min(76vw,480px)] aspect-square select-none">
-        {/* Static Architectural SVG Baseboard (1100 x 1100 matching 11x11 grid) */}
+    <div className="relative rounded-[28px] border border-white/[0.09] bg-[#060608] p-3 sm:p-4 shadow-[0_24px_80px_rgba(0,0,0,0.95)]">
+      <div className="w-[min(90vw,420px)] sm:w-[min(76vw,480px)] aspect-square select-none">
+        {/* Single unified 1100x1100 SVG coordinate space so baseboard, previews & pawns align with 0px drift */}
         <svg
           viewBox="0 0 1100 1100"
-          className="w-full h-full block"
+          className="w-full h-full block overflow-visible"
           role="img"
           aria-label="Mensch, ärgere dich nicht Spielbrett"
         >
-          {/* Subtle cross silhouette background */}
+          <defs>
+            {([0, 1, 2, 3] as SeatIndex[]).map((seat) => {
+              const hex = SEAT_COLORS[seat].hex;
+              return (
+                <radialGradient
+                  key={`grad-${seat}`}
+                  id={`pawn-grad-${seat}`}
+                  cx="35%"
+                  cy="30%"
+                  r="70%"
+                >
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
+                  <stop offset="45%" stopColor={hex} stopOpacity="1" />
+                  <stop offset="100%" stopColor="#000000" stopOpacity="0.55" />
+                </radialGradient>
+              );
+            })}
+          </defs>
+
+          {/* Symmetrical Cross Silhouette (outer edges 4..1096, arm width 398..702) */}
           <path
-            d="M402 8 H698 Q708 8 708 18 V392 H1082 Q1092 392 1092 402 V698 Q1092 708 1082 708 H708 V1082 Q708 1092 698 1092 H402 Q392 1092 392 1082 V708 H18 Q8 708 8 698 V402 Q8 392 18 392 H392 V18 Q392 8 402 8 Z"
+            d="M416 4 H684 Q702 4 702 22 V398 H1078 Q1096 398 1096 416 V684 Q1096 702 1078 702 H702 V1078 Q702 1096 684 1096 H416 Q398 1096 398 1078 V702 H22 Q4 702 4 684 V416 Q4 398 22 398 H398 V22 Q398 4 416 4 Z"
             fill="#0A0A0E"
-            stroke="rgba(255,255,255,0.06)"
+            stroke="rgba(255,255,255,0.07)"
             strokeWidth="2"
           />
 
-          {/* 4 Corner Startbox Enclosures */}
+          {/* 4 Symmetric Corner Startbox Enclosures */}
           {([0, 1, 2, 3] as SeatIndex[]).map((seat) => {
             const box = BASE_CORNER_BOX[seat];
             const meta = SEAT_COLORS[seat];
@@ -207,7 +227,7 @@ export function MaednBoard({
                   y={box.y}
                   width={box.size}
                   height={box.size}
-                  rx="28"
+                  rx="30"
                   fill={isTurnSeat ? meta.softBg : '#09090C'}
                   stroke={
                     isTurnSeat
@@ -227,7 +247,7 @@ export function MaednBoard({
                       <circle
                         cx={pt.x}
                         cy={pt.y}
-                        r="34"
+                        r="33"
                         fill="#050507"
                         stroke={isActive ? meta.border : 'rgba(255,255,255,0.08)'}
                         strokeWidth="2.5"
@@ -235,9 +255,9 @@ export function MaednBoard({
                       <circle
                         cx={pt.x}
                         cy={pt.y}
-                        r="11"
+                        r="10"
                         fill={meta.hex}
-                        opacity={isActive ? 0.28 : 0.12}
+                        opacity={isActive ? 0.3 : 0.12}
                       />
                     </g>
                   );
@@ -255,7 +275,7 @@ export function MaednBoard({
             strokeLinejoin="round"
           />
 
-          {/* Colored Goal Entry Bridges & Goal Lane Capsules */}
+          {/* Colored Goal Entry Bridges & Goal Sockets */}
           {([0, 1, 2, 3] as SeatIndex[]).map((seat) => {
             const meta = SEAT_COLORS[seat];
             const isActive = activeSeats.has(seat);
@@ -284,16 +304,16 @@ export function MaednBoard({
                       <circle
                         cx={pt.x}
                         cy={pt.y}
-                        r="31"
+                        r="30"
                         fill="#07070A"
                         stroke={meta.hex}
                         strokeWidth="3"
-                        opacity="0.9"
+                        opacity="0.92"
                       />
                       <circle
                         cx={pt.x}
                         cy={pt.y}
-                        r="24"
+                        r="23"
                         fill={meta.hex}
                         opacity="0.16"
                       />
@@ -316,11 +336,10 @@ export function MaednBoard({
 
               return (
                 <g key={`track-${idx}`}>
-                  {/* Outer halo */}
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r="38"
+                    r="36"
                     fill="#07070A"
                     stroke={meta.hex}
                     strokeWidth={isActive ? 3.5 : 2}
@@ -329,14 +348,13 @@ export function MaednBoard({
                   <circle
                     cx={pt.x}
                     cy={pt.y}
-                    r="31"
+                    r="29"
                     fill={meta.hex}
                     opacity={isActive ? 0.24 : 0.08}
                   />
-                  {/* Directional chevron showing clockwise start direction */}
                   <g
                     transform={`translate(${pt.x}, ${pt.y}) rotate(${rotation})`}
-                    opacity={isActive ? 0.9 : 0.35}
+                    opacity={isActive ? 0.92 : 0.35}
                   >
                     <path
                       d="M -7 -9 L 5 0 L -7 9"
@@ -356,7 +374,7 @@ export function MaednBoard({
                 <circle
                   cx={pt.x}
                   cy={pt.y}
-                  r="30"
+                  r="29"
                   fill="#0B0B10"
                   stroke="rgba(255,255,255,0.2)"
                   strokeWidth="2.5"
@@ -383,31 +401,26 @@ export function MaednBoard({
               stroke="rgba(255,255,255,0.14)"
               strokeWidth="2"
             />
-            {/* Bottom Triangle -> Seat 0 (Rot) */}
             <polygon
               points="508,592 592,592 550,550"
               fill={SEAT_COLORS[0].hex}
-              opacity={activeSeats.has(0) ? 0.42 : 0.1}
+              opacity={activeSeats.has(0) ? 0.44 : 0.1}
             />
-            {/* Left Triangle -> Seat 1 (Blau) */}
             <polygon
               points="508,508 508,592 550,550"
               fill={SEAT_COLORS[1].hex}
-              opacity={activeSeats.has(1) ? 0.42 : 0.1}
+              opacity={activeSeats.has(1) ? 0.44 : 0.1}
             />
-            {/* Top Triangle -> Seat 2 (Gelb) */}
             <polygon
               points="508,508 592,508 550,550"
               fill={SEAT_COLORS[2].hex}
-              opacity={activeSeats.has(2) ? 0.42 : 0.1}
+              opacity={activeSeats.has(2) ? 0.44 : 0.1}
             />
-            {/* Right Triangle -> Seat 3 (Grün) */}
             <polygon
               points="592,508 592,592 550,550"
               fill={SEAT_COLORS[3].hex}
-              opacity={activeSeats.has(3) ? 0.42 : 0.1}
+              opacity={activeSeats.has(3) ? 0.44 : 0.1}
             />
-            {/* Crisp center X divider + hub */}
             <line
               x1="509"
               y1="509"
@@ -433,107 +446,138 @@ export function MaednBoard({
               strokeWidth="2.5"
             />
           </g>
-        </svg>
 
-        {/* Destination Preview Halos */}
-        {targetPreviewMoves.map(({ move, coord }) => (
-          <div
-            key={`preview-${move.pawnIndex}-${coord.row}-${coord.col}`}
-            aria-hidden="true"
-            style={{
-              left: `${((coord.col + 0.5) / 11) * 100}%`,
-              top: `${((coord.row + 0.5) / 11) * 100}%`,
-              width: `${(1 / 11) * 86}%`,
-              height: `${(1 / 11) * 86}%`,
-              transform: 'translate(-50%, -50%)',
-            }}
-            className={`pointer-events-none absolute z-10 rounded-full border-2 ${
-              move.capturesPlayerId
-                ? 'border-white bg-white/15 animate-soft-pulse'
-                : 'border-white/80 border-dashed bg-white/[0.06]'
-            }`}
-          />
-        ))}
-
-        {/* Unambiguous Clickable Target Cells */}
-        {uniqueTargetCells.map((target) => (
-          <button
-            key={`target-hit-${target.row}-${target.col}`}
-            type="button"
-            aria-label={`Zielfeld Zeile ${target.row + 1} Spalte ${target.col + 1}`}
-            onClick={() => {
-              setHoveredMove(null);
-              onMovePawn(target.pawnIndex);
-            }}
-            style={{
-              left: `${((target.col + 0.5) / 11) * 100}%`,
-              top: `${((target.row + 0.5) / 11) * 100}%`,
-              width: `${(1 / 11) * 92}%`,
-              height: `${(1 / 11) * 92}%`,
-              transform: 'translate(-50%, -50%)',
-            }}
-            className="absolute z-20 rounded-full cursor-pointer hover:bg-white/[0.08] transition-colors"
-          />
-        ))}
-
-        {/* Persistent Pawn Overlay Layer with Smooth CSS Transitions */}
-        {pawnTokens.map((token) => {
-          const meta = SEAT_COLORS[token.seat];
-          const isMovable = Boolean(token.legalMove);
-
-          return (
-            <button
-              key={token.key}
-              type="button"
-              disabled={!isMovable}
-              onMouseEnter={() => {
-                if (token.legalMove) setHoveredMove(token.legalMove);
-              }}
-              onMouseLeave={() => {
-                if (token.legalMove) setHoveredMove(null);
-              }}
-              onClick={() => {
-                if (!token.legalMove) return;
-                setHoveredMove(null);
-                onMovePawn(token.pawnIndex);
-              }}
-              aria-label={`${meta.labelDe} Figur ${token.pawnIndex + 1}`}
-              style={{
-                left: `${((token.coord.col + 0.5) / 11) * 100}%`,
-                top: `${((token.coord.row + 0.5) / 11) * 100}%`,
-                width: `${(1 / 11) * 72}%`,
-                height: `${(1 / 11) * 72}%`,
-                transform: `translate(-50%, -50%) scale(${isMovable ? 1.12 : 1})`,
-                background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.42), ${meta.hex} 58%, rgba(0,0,0,0.45) 100%)`,
-                backgroundColor: meta.hex,
-                borderColor: isMovable
-                  ? '#ffffff'
-                  : token.isActiveTurnOwner
-                    ? 'rgba(255,255,255,0.88)'
-                    : 'rgba(255,255,255,0.58)',
-                boxShadow: isMovable
-                  ? `0 0 0 3px rgba(255,255,255,0.9), 0 0 18px ${meta.hex}`
-                  : token.wasJustMoved
-                    ? `0 0 0 2px rgba(255,255,255,0.55), 0 4px 10px rgba(0,0,0,0.75)`
-                    : '0 4px 10px rgba(0,0,0,0.72), inset 0 1px 2px rgba(255,255,255,0.35)',
-              }}
-              className={`absolute rounded-full border-2 flex items-center justify-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                isMovable ? 'z-30 cursor-pointer' : 'z-[25] cursor-default'
-              }`}
-            >
-              {/* Tactile Halmakegel top crown */}
-              <span className="w-[40%] h-[40%] rounded-full bg-white/90 shadow-inner pointer-events-none" />
-
-              {/* Gentle pulse ring around movable pawns */}
-              {isMovable && (
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -inset-1.5 rounded-full border-2 border-white/80 animate-soft-pulse"
+          {/* Exact-center Destination Preview Halos */}
+          {targetPreviewMoves.map(({ move, coord }) => {
+            const pt = centerOf(coord.row, coord.col);
+            const isCapture = Boolean(move.capturesPlayerId);
+            return (
+              <g
+                key={`preview-${move.pawnIndex}-${coord.row}-${coord.col}`}
+                pointerEvents="none"
+              >
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={isCapture ? 43 : 40}
+                  fill={isCapture ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)'}
+                  stroke={isCapture ? '#ffffff' : 'rgba(255,255,255,0.8)'}
+                  strokeWidth="4"
+                  strokeDasharray={isCapture ? undefined : '9 7'}
+                  className={isCapture ? 'animate-soft-pulse' : undefined}
                 />
-              )}
-            </button>
-          );
-        })}
+              </g>
+            );
+          })}
+
+          {/* Unambiguous Clickable Target Fields */}
+          {uniqueTargetCells.map((target) => {
+            const pt = centerOf(target.row, target.col);
+            return (
+              <circle
+                key={`target-hit-${target.row}-${target.col}`}
+                cx={pt.x}
+                cy={pt.y}
+                r="44"
+                fill="transparent"
+                className="cursor-pointer hover:fill-white/[0.08] transition-colors"
+                role="button"
+                tabIndex={0}
+                aria-label={`Zielfeld Zeile ${target.row + 1} Spalte ${target.col + 1}`}
+                onClick={() => {
+                  setHoveredMove(null);
+                  onMovePawn(target.pawnIndex);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setHoveredMove(null);
+                    onMovePawn(target.pawnIndex);
+                  }
+                }}
+              />
+            );
+          })}
+
+          {/* Smooth-gliding Pawn Layer centered identically in 1100x1100 SVG space */}
+          {pawnTokens.map((token) => {
+            const pt = centerOf(token.coord.row, token.coord.col);
+            const meta = SEAT_COLORS[token.seat];
+            const isMovable = Boolean(token.legalMove);
+            const pawnRadius = isMovable ? 33 : 30;
+
+            return (
+              <g
+                key={token.key}
+                style={{
+                  transform: `translate(${pt.x}px, ${pt.y}px)`,
+                  transition: 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
+                className={isMovable ? 'cursor-pointer focus:outline-none' : 'cursor-default'}
+                role={isMovable ? 'button' : undefined}
+                tabIndex={isMovable ? 0 : undefined}
+                aria-label={`${meta.labelDe} Figur ${token.pawnIndex + 1}`}
+                onMouseEnter={() => {
+                  if (token.legalMove) setHoveredMove(token.legalMove);
+                }}
+                onMouseLeave={() => {
+                  if (token.legalMove) setHoveredMove(null);
+                }}
+                onClick={() => {
+                  if (!token.legalMove) return;
+                  setHoveredMove(null);
+                  onMovePawn(token.pawnIndex);
+                }}
+                onKeyDown={(e) => {
+                  if (!token.legalMove) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setHoveredMove(null);
+                    onMovePawn(token.pawnIndex);
+                  }
+                }}
+              >
+                {/* Pulsing luminous halo around movable pawns */}
+                {isMovable && (
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="42"
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="3.5"
+                    className="animate-soft-pulse"
+                  />
+                )}
+
+                {/* Grounding shadow directly below piece */}
+                <circle cx="0" cy="4" r={pawnRadius} fill="rgba(0,0,0,0.65)" />
+
+                {/* Base solid color disc + lacquer gradient overlay */}
+                <circle cx="0" cy="0" r={pawnRadius} fill={meta.hex} />
+                <circle
+                  cx="0"
+                  cy="0"
+                  r={pawnRadius}
+                  fill={`url(#pawn-grad-${token.seat})`}
+                  stroke={
+                    isMovable
+                      ? '#ffffff'
+                      : token.wasJustMoved
+                        ? 'rgba(255,255,255,0.92)'
+                        : token.isActiveTurnOwner
+                          ? 'rgba(255,255,255,0.85)'
+                          : 'rgba(255,255,255,0.58)'
+                  }
+                  strokeWidth={isMovable ? 4 : token.wasJustMoved ? 3.5 : 3}
+                />
+
+                {/* Tactile Halmakegel white center crown */}
+                <circle cx="0" cy="0" r={isMovable ? 12 : 11} fill="rgba(255,255,255,0.92)" />
+              </g>
+            );
+          })}
+        </svg>
       </div>
     </div>
   );

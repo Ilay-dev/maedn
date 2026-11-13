@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameTable } from './components/GameTable.tsx';
 import { HomeScreen } from './components/HomeScreen.tsx';
 import { LobbyScreen } from './components/LobbyScreen.tsx';
@@ -13,7 +13,8 @@ function readRoomParam(): string {
 }
 
 export default function App() {
-  const [initialRoomCode] = useState<string>(() => readRoomParam());
+  const [initialRoomCode, setInitialRoomCode] = useState<string>(() => readRoomParam());
+  const wasInRoomRef = useRef(false);
   const {
     connected,
     roomState,
@@ -49,24 +50,35 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [errorBanner, clearError]);
 
+  const clearInviteParam = useCallback(() => {
+    setInitialRoomCode('');
+    if (typeof window !== 'undefined' && window.location.search) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('room')) {
+        url.searchParams.delete('room');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (roomState?.roomCode) {
+      wasInRoomRef.current = true;
       const url = new URL(window.location.href);
       if (url.searchParams.get('room') !== roomState.roomCode) {
         url.searchParams.set('room', roomState.roomCode);
         window.history.replaceState({}, '', `${url.pathname}${url.search}`);
       }
+    } else if (wasInRoomRef.current) {
+      wasInRoomRef.current = false;
+      clearInviteParam();
     }
-  }, [roomState?.roomCode]);
+  }, [roomState?.roomCode, clearInviteParam]);
 
   const handleLeaveRoom = async () => {
     await leaveRoom();
-    if (typeof window !== 'undefined' && window.location.search) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('room');
-      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
-    }
+    clearInviteParam();
   };
 
   if (!roomState) {
@@ -81,6 +93,7 @@ export default function App() {
         onJoinRoom={async (code, name) => {
           await joinRoom(code, name);
         }}
+        onClearInvite={clearInviteParam}
         onClearError={clearError}
       />
     );
@@ -134,3 +147,4 @@ export default function App() {
     </>
   );
 }
+

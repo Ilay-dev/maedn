@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Peer, { type DataConnection } from 'peerjs';
+import { safeRandomUUID } from '../../shared/gameEngine.ts';
 import type {
   ClientRoomState,
   RoomActionResponse,
@@ -86,6 +87,8 @@ export function useMaednSocket() {
     Map<string, { resolve: (res: RoomActionResponse) => void; timer: ReturnType<typeof setTimeout> }>
   >(new Map());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const attemptIdRef = useRef(0);
 
   const [connected, setConnected] = useState(true);
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
@@ -100,6 +103,11 @@ export function useMaednSocket() {
   }, []);
 
   const cleanupPeerResources = useCallback(() => {
+    attemptIdRef.current += 1;
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
@@ -155,7 +163,7 @@ export function useMaednSocket() {
           resolve({ ok: false, error: 'Keine Verbindung zum Host.' });
           return;
         }
-        const requestId = globalThis.crypto.randomUUID();
+        const requestId = safeRandomUUID();
         const timer = setTimeout(() => {
           pendingRequestsRef.current.delete(requestId);
           resolve({ ok: false, error: 'Zeitüberschreitung beim Host.' });
@@ -176,16 +184,26 @@ export function useMaednSocket() {
       cleanupPeerResources();
       saveGuestSession(null);
 
+      const attemptId = ++attemptIdRef.current;
       const cleanCode = roomCode.trim().toUpperCase();
       const targetHostPeerId = `maedn-room-${cleanCode}`;
 
       return new Promise((resolve) => {
-        const peer = new Peer(PEER_OPTIONS);
+        let peer: Peer;
+        try {
+          peer = new Peer(PEER_OPTIONS);
+        } catch {
+          const msg = 'WebRTC P2P konnte nicht initialisiert werden.';
+          setErrorBanner(msg);
+          resolve({ ok: false, error: msg });
+          return;
+        }
+
         peerRef.current = peer;
         let settled = false;
 
         const fail = (message: string) => {
-          if (settled) return;
+          if (settled || attemptId !== attemptIdRef.current) return;
           settled = true;
           setConnected(true);
           setErrorBanner(message);
@@ -193,15 +211,17 @@ export function useMaednSocket() {
           resolve({ ok: false, error: message });
         };
 
-        const overallTimer = setTimeout(() => {
+        connectTimeoutRef.current = setTimeout(() => {
           fail('Host nicht erreichbar oder Room existiert nicht.');
         }, 14_000);
 
         peer.on('open', () => {
+          if (attemptId !== attemptIdRef.current) return;
           const conn = peer.connect(targetHostPeerId, { reliable: true });
           guestConnRef.current = conn;
 
           conn.on('data', (raw) => {
+            if (attemptId !== attemptIdRef.current) return;
             const data = raw as PeerMsgToGuest;
             if (!data || typeof data !== 'object') return;
             if (data.type === 'res') {
@@ -222,6 +242,7 @@ export function useMaednSocket() {
           });
 
           conn.on('open', async () => {
+            if (attemptId !== attemptIdRef.current) return;
             setConnected(true);
             heartbeatRef.current = setInterval(() => {
               if (conn.open) {
@@ -230,7 +251,11 @@ export function useMaednSocket() {
             }, 15_000);
 
             const res = await onOpened(conn);
-            clearTimeout(overallTimer);
+            if (attemptId !== attemptIdRef.current) return;
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             if (!settled) {
               settled = true;
               if (!res.ok) {
@@ -245,7 +270,11 @@ export function useMaednSocket() {
           });
 
           conn.on('close', () => {
-            clearTimeout(overallTimer);
+            if (attemptId !== attemptIdRef.current) return;
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             if (!settled) {
               fail('Verbindung zum Host fehlgeschlagen.');
             } else {
@@ -258,13 +287,21 @@ export function useMaednSocket() {
           });
 
           conn.on('error', () => {
-            clearTimeout(overallTimer);
+            if (attemptId !== attemptIdRef.current) return;
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             fail('WebRTC-Verbindungsfehler zum Host.');
           });
         });
 
         peer.on('error', (err) => {
-          clearTimeout(overallTimer);
+          if (attemptId !== attemptIdRef.current) return;
+          if (connectTimeoutRef.current) {
+            clearTimeout(connectTimeoutRef.current);
+            connectTimeoutRef.current = null;
+          }
           const msg =
             err.type === 'peer-unavailable'
               ? 'Room nicht gefunden. Prüfe den Room-Code oder ob der Host noch online ist.'
@@ -290,29 +327,49 @@ export function useMaednSocket() {
       cleanupPeerResources();
       saveGuestSession(null);
 
+      const attemptId = ++attemptIdRef.current;
+
       return new Promise((resolve) => {
         let attempts = 0;
 
         const tryCreate = () => {
+          if (attemptId !== attemptIdRef.current) return;
           attempts += 1;
           const roomCode = generateBrowserRoomCode();
           const hostPeerId = `maedn-room-${roomCode}`;
-          const peer = new Peer(hostPeerId, PEER_OPTIONS);
+
+          let peer: Peer;
+          try {
+            peer = new Peer(hostPeerId, PEER_OPTIONS);
+          } catch {
+            const msg = 'WebRTC P2P konnte im Browser nicht gestartet werden.';
+            setErrorBanner(msg);
+            resolve({ ok: false, error: msg });
+            return;
+          }
+
           peerRef.current = peer;
           let opened = false;
 
-          const timeout = setTimeout(() => {
-            if (!opened) {
+          if (connectTimeoutRef.current) {
+            clearTimeout(connectTimeoutRef.current);
+          }
+          connectTimeoutRef.current = setTimeout(() => {
+            if (!opened && attemptId === attemptIdRef.current) {
               cleanupPeerResources();
               const msg = 'Konnte P2P-Host nicht starten. Bitte erneut versuchen.';
               setErrorBanner(msg);
               resolve({ ok: false, error: msg });
             }
-          }, 12_000);
+          }, 15_000);
 
           peer.on('open', () => {
+            if (attemptId !== attemptIdRef.current) return;
             opened = true;
-            clearTimeout(timeout);
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             setConnected(true);
             setErrorBanner(null);
 
@@ -320,6 +377,7 @@ export function useMaednSocket() {
               roomCode,
               playerName,
               (targetPeerId, state) => {
+                if (attemptId !== attemptIdRef.current) return;
                 if (targetPeerId === 'HOST_LOCAL') {
                   setRoomState(state);
                   return;
@@ -352,6 +410,7 @@ export function useMaednSocket() {
           });
 
           peer.on('connection', (conn) => {
+            if (attemptId !== attemptIdRef.current) return;
             guestConnectionsRef.current.set(conn.peer, conn);
 
             conn.on('data', (raw) => {
@@ -390,6 +449,7 @@ export function useMaednSocket() {
           });
 
           peer.on('disconnected', () => {
+            if (attemptId !== attemptIdRef.current) return;
             try {
               if (!peer.destroyed) peer.reconnect();
             } catch {
@@ -398,7 +458,11 @@ export function useMaednSocket() {
           });
 
           peer.on('error', (err) => {
-            clearTimeout(timeout);
+            if (attemptId !== attemptIdRef.current) return;
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             if (!opened && err.type === 'unavailable-id' && attempts < 3) {
               peer.destroy();
               tryCreate();
@@ -523,3 +587,4 @@ export function useMaednSocket() {
     movePawn,
   };
 }
+

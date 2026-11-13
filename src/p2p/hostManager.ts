@@ -9,6 +9,7 @@ import {
   executeMove,
   performRollDice,
   pushEvent,
+  safeRandomUUID,
   secureRandomInt,
   skipCurrentTurn,
   startMatch,
@@ -63,7 +64,7 @@ export class BrowserHostManager {
     this.onBroadcast = onBroadcast;
     this.onKicked = onKicked;
 
-    const hostId = globalThis.crypto.randomUUID();
+    const hostId = safeRandomUUID();
     const host: InternalMaednPlayer = {
       id: hostId,
       name: this.sanitizeName(hostName),
@@ -71,7 +72,7 @@ export class BrowserHostManager {
       isBot: false,
       isReady: false,
       connected: true,
-      reconnectToken: globalThis.crypto.randomUUID(),
+      reconnectToken: safeRandomUUID(),
       socketId: 'HOST_LOCAL',
       seat: null,
       color: null,
@@ -204,8 +205,8 @@ export class BrowserHostManager {
       return { ok: false, error: 'Der Room ist bereits voll (max. 4 Spieler).' };
     }
 
-    const playerId = globalThis.crypto.randomUUID();
-    const reconnectToken = globalThis.crypto.randomUUID();
+    const playerId = safeRandomUUID();
+    const reconnectToken = safeRandomUUID();
     const name = this.uniqueName(this.sanitizeName(rawName));
 
     const player: InternalMaednPlayer = {
@@ -373,13 +374,13 @@ export class BrowserHostManager {
           BOT_NAMES.find((n) => !usedNames.has(n)) ??
           `Bot ${this.room.players.length + 1}`;
         const bot: InternalMaednPlayer = {
-          id: globalThis.crypto.randomUUID(),
+          id: safeRandomUUID(),
           name: botName,
           isHost: false,
           isBot: true,
           isReady: true,
           connected: true,
-          reconnectToken: globalThis.crypto.randomUUID(),
+          reconnectToken: safeRandomUUID(),
           socketId: null,
           seat: null,
           color: null,

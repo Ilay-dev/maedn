@@ -7,6 +7,7 @@ interface HomeScreenProps {
   errorMessage: string | null;
   onCreateRoom: (playerName: string) => Promise<void>;
   onJoinRoom: (roomCode: string, playerName: string) => Promise<void>;
+  onClearInvite: () => void;
   onClearError: () => void;
 }
 
@@ -18,6 +19,7 @@ export function HomeScreen({
   errorMessage,
   onCreateRoom,
   onJoinRoom,
+  onClearInvite,
   onClearError,
 }: HomeScreenProps) {
   const [playerName, setPlayerName] = useState<string>(() => {
@@ -28,6 +30,7 @@ export function HomeScreen({
     }
   });
   const [roomCode, setRoomCode] = useState<string>(initialRoomCode);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
   const [submitting, setSubmitting] = useState<'create' | 'join' | null>(null);
   const [showRules, setShowRules] = useState(false);
 
@@ -39,13 +42,26 @@ export function HomeScreen({
     }
   };
 
+  const dismissInvite = () => {
+    setInviteDismissed(true);
+    setRoomCode('');
+    onClearError();
+    onClearInvite();
+  };
+
   const handleCreate = async () => {
     const clean = playerName.trim();
     if (!clean || submitting) return;
+    onClearError();
+    onClearInvite();
+    setInviteDismissed(true);
     persistName(clean);
     setSubmitting('create');
-    await onCreateRoom(clean);
-    setSubmitting(null);
+    try {
+      await onCreateRoom(clean);
+    } finally {
+      setSubmitting(null);
+    }
   };
 
   const handleJoin = async (e: FormEvent) => {
@@ -53,14 +69,18 @@ export function HomeScreen({
     const clean = playerName.trim();
     const code = roomCode.trim().toUpperCase();
     if (!clean || code.length < 4 || submitting) return;
+    onClearError();
     persistName(clean);
     setSubmitting('join');
-    await onJoinRoom(code, clean);
-    setSubmitting(null);
+    try {
+      await onJoinRoom(code, clean);
+    } finally {
+      setSubmitting(null);
+    }
   };
 
   const hasName = playerName.trim().length > 0;
-  const hasInviteCode = initialRoomCode.length > 0;
+  const hasInviteCode = initialRoomCode.length > 0 && !inviteDismissed;
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col justify-between px-4 py-8 sm:px-6">
@@ -198,31 +218,52 @@ export function HomeScreen({
               </form>
             </>
           ) : (
-            <form onSubmit={(e) => void handleJoin(e)} className="space-y-4">
-              <div className="rounded-xl border border-white/15 bg-[#08080A] px-4 py-3 flex items-center justify-between">
-                <span className="text-xs text-zinc-400 uppercase tracking-wider">Einladung</span>
-                <span className="font-mono-code text-base font-bold tracking-[0.2em] text-white">
-                  {roomCode}
-                </span>
+            <div className="space-y-4">
+              <form onSubmit={(e) => void handleJoin(e)} className="space-y-3">
+                <div className="rounded-xl border border-white/15 bg-[#08080A] px-4 py-3 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[11px] text-zinc-400 uppercase tracking-wider block">
+                      Einladung
+                    </span>
+                    <span className="font-mono-code text-base font-bold tracking-[0.2em] text-white">
+                      {roomCode || initialRoomCode}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={dismissInvite}
+                    className="text-xs text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Code ändern
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!hasName || submitting !== null}
+                  className="w-full rounded-xl bg-white text-black font-semibold py-3.5 px-5 text-sm flex items-center justify-center gap-2 hover:bg-zinc-200 disabled:opacity-35 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  <span>{submitting === 'join' ? 'Trete bei…' : 'Room beitreten'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+
+              <div className="relative flex items-center py-0.5">
+                <div className="flex-grow border-t border-white/[0.08]" />
+                <span className="mx-3 text-[11px] uppercase tracking-widest text-zinc-600">oder</span>
+                <div className="flex-grow border-t border-white/[0.08]" />
               </div>
 
               <button
-                type="submit"
-                disabled={!hasName || submitting !== null}
-                className="w-full rounded-xl bg-white text-black font-semibold py-3.5 px-5 text-sm flex items-center justify-center gap-2 hover:bg-zinc-200 disabled:opacity-35 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <span>{submitting === 'join' ? 'Trete bei…' : 'Room beitreten'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <button
                 type="button"
-                onClick={() => setRoomCode('')}
-                className="w-full text-xs text-zinc-500 hover:text-white transition-colors py-1 cursor-pointer"
+                disabled={!hasName || submitting !== null}
+                onClick={() => void handleCreate()}
+                className="w-full rounded-xl border border-white/20 bg-white/[0.06] text-white font-semibold py-3.5 px-5 text-sm flex items-center justify-center gap-2 hover:bg-white hover:text-black disabled:opacity-35 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                Stattdessen eigenen Room erstellen
+                <Plus className="w-4 h-4" />
+                <span>{submitting === 'create' ? 'Erstelle Room…' : 'Neuen Room erstellen'}</span>
               </button>
-            </form>
+            </div>
           )}
         </div>
       </main>
@@ -234,3 +275,4 @@ export function HomeScreen({
     </div>
   );
 }
+

@@ -1,0 +1,136 @@
+import { useEffect, useState } from 'react';
+import { GameTable } from './components/GameTable.tsx';
+import { HomeScreen } from './components/HomeScreen.tsx';
+import { LobbyScreen } from './components/LobbyScreen.tsx';
+import { useMaednSocket } from './hooks/useSocket.ts';
+import { useSound } from './hooks/useSound.ts';
+
+function readRoomParam(): string {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('room') ?? '';
+  return code.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+}
+
+export default function App() {
+  const [initialRoomCode] = useState<string>(() => readRoomParam());
+  const {
+    connected,
+    roomState,
+    errorBanner,
+    clearError,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    toggleReady,
+    addBot,
+    removePlayer,
+    skipDisconnected,
+    returnToLobby,
+    rollDice,
+    movePawn,
+  } = useMaednSocket();
+
+  const {
+    soundEnabled,
+    toggleSound,
+    playDiceSound,
+    playStepSound,
+    playCaptureSound,
+    playGoalSound,
+    playTurnSound,
+    playRejectSound,
+    playWinSound,
+  } = useSound();
+
+  useEffect(() => {
+    if (!errorBanner) return;
+    const timer = setTimeout(() => clearError(), 4500);
+    return () => clearTimeout(timer);
+  }, [errorBanner, clearError]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (roomState?.roomCode) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('room') !== roomState.roomCode) {
+        url.searchParams.set('room', roomState.roomCode);
+        window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+      }
+    }
+  }, [roomState?.roomCode]);
+
+  const handleLeaveRoom = async () => {
+    await leaveRoom();
+    if (typeof window !== 'undefined' && window.location.search) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    }
+  };
+
+  if (!roomState) {
+    return (
+      <HomeScreen
+        connected={connected}
+        initialRoomCode={initialRoomCode}
+        errorMessage={errorBanner}
+        onCreateRoom={async (name) => {
+          await createRoom(name);
+        }}
+        onJoinRoom={async (code, name) => {
+          await joinRoom(code, name);
+        }}
+        onClearError={clearError}
+      />
+    );
+  }
+
+  return (
+    <>
+      {errorBanner && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-white/25 bg-[#111113] px-4 py-2.5 text-xs text-white shadow-2xl flex items-center gap-3">
+          <span>{errorBanner}</span>
+          <button
+            type="button"
+            onClick={clearError}
+            className="text-zinc-400 hover:text-white cursor-pointer"
+          >
+            OK
+          </button>
+        </div>
+      )}
+
+      {roomState.phase === 'lobby' ? (
+        <LobbyScreen
+          room={roomState}
+          connected={connected}
+          onToggleReady={toggleReady}
+          onAddBot={addBot}
+          onRemovePlayer={removePlayer}
+          onLeave={() => void handleLeaveRoom()}
+        />
+      ) : (
+        <GameTable
+          room={roomState}
+          connected={connected}
+          soundEnabled={soundEnabled}
+          onToggleSound={toggleSound}
+          onRollDice={rollDice}
+          onMovePawn={movePawn}
+          onToggleReady={toggleReady}
+          onSkipDisconnected={skipDisconnected}
+          onReturnToLobby={returnToLobby}
+          onLeave={() => void handleLeaveRoom()}
+          onPlayDiceSound={playDiceSound}
+          onPlayStepSound={playStepSound}
+          onPlayCaptureSound={playCaptureSound}
+          onPlayGoalSound={playGoalSound}
+          onPlayTurnSound={playTurnSound}
+          onPlayRejectSound={playRejectSound}
+          onPlayWinSound={playWinSound}
+        />
+      )}
+    </>
+  );
+}

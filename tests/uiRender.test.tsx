@@ -23,6 +23,8 @@ describe('MAEDN UI components smoke render', () => {
     );
     expect(htmlNormal).toContain('Neuen Room erstellen');
     expect(htmlNormal).toContain('Mit Room-Code beitreten');
+    expect(htmlNormal).toContain('href="https://gundigame.vercel.app"');
+    expect(htmlNormal).toContain('Zurück zum Dashboard');
 
     const htmlInvite = renderToString(
       <HomeScreen
@@ -38,6 +40,8 @@ describe('MAEDN UI components smoke render', () => {
     expect(htmlInvite).toContain('ABC123');
     expect(htmlInvite).toContain('Room beitreten');
     expect(htmlInvite).toContain('Neuen Room erstellen');
+    expect(htmlInvite).toContain('href="https://gundigame.vercel.app"');
+    expect(htmlInvite).toContain('Zurück zum Dashboard');
   });
 
   it('renders LobbyScreen and GameTable with active per-player dice and board without throwing', () => {
@@ -98,3 +102,4 @@ describe('MAEDN UI components smoke render', () => {
     manager.destroy();
   });
 });
+
